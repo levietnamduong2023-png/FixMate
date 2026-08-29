@@ -1,4 +1,5 @@
-import { idOf, money } from '../api.js';
+import { useEffect, useState } from 'react';
+import { api, idOf, money } from '../api.js';
 
 const steps = [
   ['01', 'Mô tả vấn đề', 'Chọn dịch vụ, thời gian và cho chúng tôi biết điều gì đang xảy ra.'],
@@ -7,6 +8,26 @@ const steps = [
 ];
 
 export default function PublicHome({ services, onStart }) {
+  const [technicians, setTechnicians] = useState([]);
+  const [selectedTechnician, setSelectedTechnician] = useState(null);
+
+  async function findTechnicians(event) {
+    if (event) event.preventDefault();
+    const data = event ? Object.fromEntries(new FormData(event.currentTarget)) : {};
+    const query = new URLSearchParams();
+    if (data.serviceId) query.set('serviceId', data.serviceId);
+    if (data.area) query.set('area', data.area);
+    const result = await api('/technicians?' + query.toString());
+    setTechnicians(result.items);
+  }
+
+  async function viewTechnician(userId) {
+    const result = await api('/technicians/' + userId);
+    setSelectedTechnician(result);
+  }
+
+  useEffect(() => { findTechnicians().catch(() => {}); }, []);
+
   return (
     <main>
       <section className="hero shell">
@@ -49,6 +70,28 @@ export default function PublicHome({ services, onStart }) {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="section shell technician-search">
+        <div className="section-heading"><div><span className="eyebrow">Thợ đã xác minh</span><h2>Tìm đúng chuyên môn</h2></div><p>Lọc theo dịch vụ và khu vực trước khi tạo yêu cầu.</p></div>
+        <form className="inline-search-form" onSubmit={findTechnicians}>
+          <select name="serviceId" defaultValue=""><option value="">Mọi dịch vụ</option>{services.map((service) => <option key={idOf(service)} value={idOf(service)}>{service.name}</option>)}</select>
+          <input name="area" placeholder="Quận/Huyện hoặc Thành phố" />
+          <button className="button primary">Tìm thợ</button>
+        </form>
+        <div className="service-grid technician-public-grid">
+          {technicians.map((profile) => <article className="service-card" key={idOf(profile)}>
+            <span className="service-index">{profile.ratingAverage?.toFixed?.(1) || '0.0'} ★</span>
+            <div className="service-icon">{profile.user?.name?.slice(0, 1) || 'T'}</div>
+            <h3>{profile.user?.name}</h3><p>{profile.bio}</p>
+            <div className="tag-row">{profile.serviceIds?.map((service) => <span key={idOf(service)}>{service.name}</span>)}</div>
+            <footer><span>{profile.area}</span><button onClick={() => viewTechnician(idOf(profile.user))} aria-label="Xem hồ sơ thợ">↗</button></footer>
+          </article>)}
+        </div>
+        {selectedTechnician && <section className="panel technician-detail">
+          <div className="panel-heading-row"><div><h3>{selectedTechnician.technician.user?.name}</h3><p>{selectedTechnician.technician.bio}</p></div><button className="icon-button" onClick={() => setSelectedTechnician(null)} aria-label="Đóng hồ sơ">×</button></div>
+          <div className="item-list">{selectedTechnician.reviews.length === 0 ? <p>Chưa có đánh giá.</p> : selectedTechnician.reviews.map((review) => <article className="list-card" key={idOf(review)}><b>{review.rating}/5 ★ · {review.customer?.name}</b><p>{review.comment}</p></article>)}</div>
+        </section>}
       </section>
 
       <section className="how-section" id="how">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, jsonBody, setToken } from '../api.js';
+import useDialogFocus from '../hooks/useDialogFocus.js';
 
 const titles = {
   login: 'Đăng nhập',
@@ -9,6 +10,7 @@ const titles = {
 };
 
 export default function AuthPanel({ onAuthenticated, onClose }) {
+  const dialogRef = useDialogFocus(onClose);
   const [mode, setMode] = useState('login');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -31,10 +33,8 @@ export default function AuthPanel({ onAuthenticated, onClose }) {
       if (mode === 'forgot') {
         const result = await api('/auth/forgot-password', { method: 'POST', body: jsonBody({ email: data.email }) });
         setMessage(result.message);
-        if (result.resetToken) {
-          setDevelopmentToken(result.resetToken);
-          setMode('reset');
-        }
+        setDevelopmentToken('');
+        setMode('reset');
       } else if (mode === 'reset') {
         const result = await api('/auth/reset-password', {
           method: 'POST',
@@ -43,9 +43,12 @@ export default function AuthPanel({ onAuthenticated, onClose }) {
         setMode('login');
         setMessage(result.message);
       } else {
-        const result = await api(`/auth/${mode === 'login' ? 'login' : 'register'}`, {
+        const payload = mode === 'register'
+          ? { ...data, acceptTerms: data.acceptTerms === 'on' }
+          : data;
+        const result = await api('/auth/' + (mode === 'login' ? 'login' : 'register'), {
           method: 'POST',
-          body: jsonBody(data),
+          body: jsonBody(payload),
         });
         setToken(result.token);
         onAuthenticated(result.user);
@@ -59,7 +62,7 @@ export default function AuthPanel({ onAuthenticated, onClose }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <section ref={dialogRef} className="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="icon-button close" onClick={onClose} aria-label="Đóng">×</button>
         <span className="eyebrow">Chào mừng đến FixMate</span>
         <h2 id="auth-title">{titles[mode]}</h2>
@@ -76,6 +79,7 @@ export default function AuthPanel({ onAuthenticated, onClose }) {
             <label>Mật khẩu mới<input name="newPassword" type="password" minLength="8" maxLength="128" autoComplete="new-password" required /></label>
           </>}
           {['register', 'reset'].includes(mode) && <small>Ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.</small>}
+          {mode === 'register' && <label className="check"><input name="acceptTerms" type="checkbox" required />Tôi đồng ý Điều khoản và Chính sách riêng tư V0.3.</label>}
           {message && <div className="alert info" role="status">{message}</div>}
           {error && <div className="alert error" role="alert">{error}</div>}
           <button className="button primary full" disabled={busy}>{busy ? 'Đang xử lý…' : titles[mode]}</button>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, getToken, idOf, setToken } from './api.js';
+import { api, idOf, setToken } from './api.js';
 import AccountPanel from './components/AccountPanel.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
@@ -23,7 +23,6 @@ export default function App() {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    if (!getToken()) return setSession(null);
     const data = await api('/auth/me');
     setSession(data);
     return data;
@@ -32,7 +31,10 @@ export default function App() {
   useEffect(() => {
     Promise.all([
       api('/services').then((data) => setServices(data.items)),
-      getToken() ? refreshSession().catch(() => setToken(null)) : Promise.resolve(),
+      refreshSession().catch(() => {
+        setToken(null);
+        setSession(null);
+      }),
     ]).finally(() => setLoading(false));
   }, [refreshSession]);
 
@@ -40,6 +42,20 @@ export default function App() {
     if (notifications) return setNotifications(null);
     try { setNotifications(await api('/notifications')); }
     catch (error) { flash(error.message, 'error'); }
+  }
+
+  async function markNotification(notificationId) {
+    try {
+      await api('/notifications/' + notificationId + '/read', { method: 'PATCH' });
+      setNotifications(await api('/notifications'));
+    } catch (error) { flash(error.message, 'error'); }
+  }
+
+  async function markAllNotifications() {
+    try {
+      await api('/notifications/read-all', { method: 'PATCH' });
+      setNotifications(await api('/notifications'));
+    } catch (error) { flash(error.message, 'error'); }
   }
 
   function clearSession() {
@@ -66,7 +82,7 @@ export default function App() {
           {!user ? <nav className="public-nav"><a href="#services">Dịch vụ</a><a href="#how">Cách hoạt động</a><a href="#support">Hỗ trợ</a></nav> : <span className="role-label">{user.role === 'ADMIN' ? 'Quản trị' : user.role === 'TECHNICIAN' ? 'Đối tác thợ' : 'Khách hàng'}</span>}
           <div className="nav-actions">
             {!user ? <><button className="text-button" onClick={() => setAuthOpen(true)}>Đăng nhập</button><button className="button dark" onClick={() => setAuthOpen(true)}>Bắt đầu</button></> : <>
-              <div className="notification-wrap"><button className="icon-button bell" onClick={loadNotifications} aria-label="Thông báo">♢{notifications?.unread > 0 && <i>{notifications.unread}</i>}</button>{notifications && <div className="notification-popover"><div className="panel-heading-row"><h3>Thông báo</h3><button className="icon-button" onClick={() => setNotifications(null)}>×</button></div>{notifications.items.length === 0 ? <p className="muted">Chưa có thông báo.</p> : notifications.items.map((item) => <article key={idOf(item)} className={!item.isRead ? 'unread' : ''}><b>{item.title}</b><p>{item.message}</p></article>)}</div>}</div>
+              <div className="notification-wrap"><button className="icon-button bell" onClick={loadNotifications} aria-label="Thông báo">♢{notifications?.unread > 0 && <i>{notifications.unread}</i>}</button>{notifications && <div className="notification-popover"><div className="panel-heading-row"><div><h3>Thông báo</h3>{notifications.unread > 0 && <button className="text-button" onClick={markAllNotifications}>Đọc tất cả</button>}</div><button className="icon-button" onClick={() => setNotifications(null)} aria-label="Đóng thông báo">×</button></div>{notifications.items.length === 0 ? <p className="muted">Chưa có thông báo.</p> : notifications.items.map((item) => <article key={idOf(item)} className={!item.isRead ? 'unread' : ''}><b>{item.title}</b><p>{item.message}</p>{!item.isRead && <button className="text-button" onClick={() => markNotification(idOf(item))}>Đánh dấu đã đọc</button>}</article>)}</div>}</div>
               <div className="user-chip"><button className="avatar-button" onClick={() => setAccountOpen(true)} aria-label="Mở tài khoản">{user.name.slice(0, 1).toUpperCase()}</button><div><button className="account-name" onClick={() => setAccountOpen(true)}>{user.name}</button><button onClick={logout}>Đăng xuất</button></div></div>
             </>}
           </div>
@@ -75,10 +91,10 @@ export default function App() {
 
       {!user && <PublicHome services={services} onStart={() => setAuthOpen(true)} />}
       {user?.role === 'CUSTOMER' && <CustomerDashboard services={services} profile={session.technicianProfile} dataVersion={dataVersion} flash={flash} />}
-      {user?.role === 'TECHNICIAN' && <TechnicianDashboard profile={session.technicianProfile} flash={flash} refreshSession={refreshSession} />}
+      {user?.role === 'TECHNICIAN' && <TechnicianDashboard profile={session.technicianProfile} services={services} flash={flash} refreshSession={refreshSession} />}
       {user?.role === 'ADMIN' && <AdminDashboard flash={flash} />}
 
-      {!user && <footer className="site-footer" id="support"><div className="shell"><div className="brand inverse"><span>F</span>FixMate</div><p>Nền tảng kết nối sửa chữa tại nhà minh bạch và đáng tin cậy.</p><small>© 2026 FixMate. MVP theo SRS V0.1.</small></div></footer>}
+      {!user && <footer className="site-footer" id="support"><div className="shell"><div className="brand inverse"><span>F</span>FixMate</div><p>Nền tảng kết nối sửa chữa tại nhà minh bạch và đáng tin cậy.</p><small>© 2026 FixMate · SRS V0.3.</small></div></footer>}
       {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} onAuthenticated={() => { setAuthOpen(false); refreshSession(); }} />}
       {accountOpen && session && <AccountPanel session={session} onClose={() => setAccountOpen(false)} onSessionChanged={refreshSession} onAddressesChanged={() => setDataVersion((value) => value + 1)} onSignedOut={clearSession} flash={flash} />}
       {toast && <div className={`toast ${toast.type}`} role="status">{toast.message}</div>}

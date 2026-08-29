@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, idOf, jsonBody, setToken } from '../api.js';
+import useDialogFocus from '../hooks/useDialogFocus.js';
 
 export default function AccountPanel({ session, onClose, onSessionChanged, onAddressesChanged, onSignedOut, flash }) {
+  const dialogRef = useDialogFocus(onClose);
   const [addresses, setAddresses] = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [consents, setConsents] = useState([]);
   const [tab, setTab] = useState('profile');
 
   async function loadAddresses() {
@@ -10,7 +14,18 @@ export default function AccountPanel({ session, onClose, onSessionChanged, onAdd
     setAddresses(result.items);
   }
 
-  useEffect(() => { loadAddresses().catch((error) => flash(error.message, 'error')); }, []);
+  async function loadSecurity() {
+    const [sessionData, consentData] = await Promise.all([
+      api('/auth/sessions'),
+      api('/profile/consents'),
+    ]);
+    setActiveSessions(sessionData.items);
+    setConsents(consentData.items);
+  }
+
+  useEffect(() => {
+    Promise.all([loadAddresses(), loadSecurity()]).catch((error) => flash(error.message, 'error'));
+  }, []);
 
   async function updateProfile(event) {
     event.preventDefault();
@@ -69,9 +84,54 @@ export default function AccountPanel({ session, onClose, onSessionChanged, onAdd
     } catch (error) { flash(error.message, 'error'); }
   }
 
+  async function requestVerification(type) {
+    try {
+      const result = await api('/auth/verification/request', {
+        method: 'POST',
+        body: jsonBody({ type }),
+      });
+      flash(result.message);
+    } catch (error) { flash(error.message, 'error'); }
+  }
+
+  async function verify(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    try {
+      await api('/auth/verify', { method: 'POST', body: jsonBody(data) });
+      form.reset();
+      await onSessionChanged();
+      flash('Xác minh thành công.');
+    } catch (error) { flash(error.message, 'error'); }
+  }
+
+  async function revokeFamily(familyId) {
+    try {
+      await api('/auth/sessions/' + familyId, { method: 'DELETE' });
+      await loadSecurity();
+      flash('Phiên đã được thu hồi.');
+    } catch (error) { flash(error.message, 'error'); }
+  }
+
+  async function updateConsent(type, granted) {
+    try {
+      await api('/profile/consents/' + type, {
+        method: 'PUT',
+        body: jsonBody({ granted, version: '0.3' }),
+      });
+      await loadSecurity();
+      flash('Lựa chọn riêng tư đã được cập nhật.');
+    } catch (error) { flash(error.message, 'error'); }
+  }
+
+  function consentValue(type) {
+    return consents.find((item) => item.type === type)?.granted || false;
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="account-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
+      <section ref={dialogRef} className="account-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
         <button className="icon-button close" onClick={onClose} aria-label="Đóng">×</button>
         <span className="eyebrow">Tài khoản FixMate</span>
         <h2 id="account-title">Hồ sơ của bạn</h2>
@@ -88,12 +148,44 @@ export default function AccountPanel({ session, onClose, onSessionChanged, onAdd
           <button className="button primary">Lưu thay đổi</button>
         </form>}
 
-        {tab === 'security' && <form className="stack-form" onSubmit={changePassword}>
-          <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
-          <label>Mật khẩu mới<input name="newPassword" type="password" minLength="8" maxLength="128" autoComplete="new-password" required /></label>
-          <small>Mật khẩu mới phải có chữ hoa, chữ thường và số. Sau khi đổi, mọi phiên cũ sẽ bị thu hồi.</small>
-          <button className="button primary">Đổi mật khẩu</button>
-        </form>}
+        {tab === 'security' && <div className="security-layout">
+          <section className="address-form">
+            <h3>Xác minh liên hệ</h3>
+            <p>Email: <b>{session.user.emailVerified ? 'Đã xác minh' : 'Chưa xác minh'}</b></p>
+            <p>Điện thoại: <b>{session.user.phoneVerified ? 'Đã xác minh' : 'Chưa xác minh'}</b></p>
+            <div className="card-actions">
+              {!session.user.emailVerified && <button className="button small" onClick={() => requestVerification('EMAIL')}>Gửi mã email</button>}
+              {!session.user.phoneVerified && session.user.phone && <button className="button small" onClick={() => requestVerification('PHONE')}>Gửi mã điện thoại</button>}
+            </div>
+            <form className="stack-form" onSubmit={verify}>
+              <label>Loại xác minh<select name="type"><option value="EMAIL">Email</option><option value="PHONE">Điện thoại</option></select></label>
+              <label>Mã xác minh<input name="token" minLength="32" maxLength="256" required /></label>
+              <button className="button primary">Xác minh</button>
+            </form>
+          </section>
+          <form className="stack-form address-form" onSubmit={changePassword}>
+            <h3>Đổi mật khẩu</h3>
+            <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+            <label>Mật khẩu mới<input name="newPassword" type="password" minLength="8" maxLength="128" autoComplete="new-password" required /></label>
+            <small>Mật khẩu mới phải có chữ hoa, chữ thường và số. Sau khi đổi, mọi phiên cũ sẽ bị thu hồi.</small>
+            <button className="button primary">Đổi mật khẩu</button>
+          </form>
+          <section className="address-form">
+            <h3>Quyền riêng tư tùy chọn</h3>
+            {['LOCATION', 'MEDIA', 'MARKETING'].map((type) => <label className="check" key={type}>
+              <input type="checkbox" checked={consentValue(type)} onChange={(event) => updateConsent(type, event.target.checked)} />
+              {type === 'LOCATION' ? 'Dùng vị trí để matching' : type === 'MEDIA' ? 'Xử lý ảnh yêu cầu' : 'Nhận nội dung marketing'}
+            </label>)}
+          </section>
+          <section className="address-form">
+            <h3>Phiên đang hoạt động</h3>
+            {activeSessions.map((item) => <article className="address-card" key={item.familyId}>
+              <b>{item.userAgent || 'Thiết bị không xác định'}</b>
+              <p>Hết hạn: {new Date(item.expiresAt).toLocaleString('vi-VN')}</p>
+              <button className="text-button danger" onClick={() => revokeFamily(item.familyId)}>Thu hồi</button>
+            </article>)}
+          </section>
+        </div>}
 
         {tab === 'addresses' && <div className="address-layout">
           <div className="address-list">
