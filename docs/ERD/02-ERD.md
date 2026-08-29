@@ -6,6 +6,8 @@ SRS V0.1 chỉ liệt kê entity dự kiến. ERD dưới đây phản ánh tr�
 erDiagram
     USER ||--o| TECHNICIAN_PROFILE : owns
     USER ||--o{ REPAIR_REQUEST : creates
+    USER ||--o{ ADDRESS : owns
+    USER ||--o{ PASSWORD_RESET_TOKEN : receives
     USER ||--o{ QUOTATION : sends
     USER ||--o{ BOOKING : customer
     USER ||--o{ BOOKING : technician
@@ -13,6 +15,7 @@ erDiagram
     USER ||--o{ AUDIT_LOG : performs
     SERVICE ||--o{ REPAIR_REQUEST : classifies
     SERVICE }o--o{ TECHNICIAN_PROFILE : expertise
+    ADDRESS ||--o{ REPAIR_REQUEST : snapshot_source
     REPAIR_REQUEST ||--o{ QUOTATION : receives
     REPAIR_REQUEST ||--o| BOOKING : produces
     QUOTATION ||--o| BOOKING : accepted_as
@@ -30,6 +33,7 @@ erDiagram
       string phone
       enum role
       enum status
+      number authVersion
       datetime createdAt
       datetime updatedAt
     }
@@ -61,9 +65,33 @@ erDiagram
       ObjectId service FK
       string description
       string address
+      ObjectId addressRef FK
       datetime desiredAt
       enum status
       string idempotencyKey UK
+    }
+
+    ADDRESS {
+      ObjectId _id PK
+      ObjectId user FK
+      string label
+      string recipientName
+      string phone
+      string line1
+      string ward
+      string district
+      string city
+      number latitude
+      number longitude
+      boolean isDefault
+    }
+
+    PASSWORD_RESET_TOKEN {
+      ObjectId _id PK
+      ObjectId user FK
+      string tokenHash UK
+      datetime expiresAt TTL
+      datetime usedAt
     }
 
     QUOTATION {
@@ -144,6 +172,8 @@ erDiagram
 | Collection | Unique key | Mục đích |
 |---|---|---|
 | `users` | `email` | Không trùng tài khoản |
+| `addresses` | partial `user + isDefault=true` | Tối đa một địa chỉ mặc định/account |
+| `passwordresettokens` | `tokenHash`, TTL `expiresAt` | Token duy nhất và tự xóa khi hết hạn |
 | `technicianprofiles` | `user` | Một hồ sơ thợ/tài khoản |
 | `repairrequests` | `customer + idempotencyKey` | Không tạo yêu cầu lặp |
 | `quotations` | `request + technician` | Một báo giá/thợ/yêu cầu |
@@ -162,4 +192,3 @@ Booking: CONFIRMED → TECHNICIAN_ON_THE_WAY → IN_PROGRESS → COMPLETED
 
 Complaint: PENDING → PROCESSING → RESOLVED | REJECTED
 ```
-

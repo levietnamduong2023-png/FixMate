@@ -2,20 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, dateTime, idOf, jsonBody, money } from '../api.js';
 import StatusPill from './StatusPill.jsx';
 
-export default function CustomerDashboard({ services, profile, flash }) {
+export default function CustomerDashboard({ services, profile, dataVersion, flash }) {
   const [tab, setTab] = useState('requests');
   const [requests, setRequests] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [quotes, setQuotes] = useState({});
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    const [requestData, bookingData] = await Promise.all([api('/requests'), api('/bookings')]);
+    const [requestData, bookingData, addressData] = await Promise.all([api('/requests'), api('/bookings'), api('/addresses')]);
     setRequests(requestData.items);
     setBookings(bookingData.items);
+    setAddresses(addressData.items);
   }
 
-  useEffect(() => { refresh().catch((error) => flash(error.message, 'error')); }, []);
+  useEffect(() => { refresh().catch((error) => flash(error.message, 'error')); }, [dataVersion]);
 
   async function createRequest(event) {
     event.preventDefault();
@@ -26,7 +28,13 @@ export default function CustomerDashboard({ services, profile, flash }) {
       await api('/requests', {
         method: 'POST',
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: jsonBody(input),
+        body: jsonBody({
+          serviceId: input.serviceId,
+          description: input.description,
+          desiredAt: input.desiredAt,
+          ...(input.addressId ? { addressId: input.addressId } : {}),
+          ...(!input.addressId && input.address ? { address: input.address } : {}),
+        }),
       });
       form.reset();
       await refresh();
@@ -125,7 +133,8 @@ export default function CustomerDashboard({ services, profile, flash }) {
           <form className="stack-form" onSubmit={createRequest}>
             <label>Dịch vụ<select name="serviceId" required defaultValue=""><option value="" disabled>Chọn dịch vụ</option>{services.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></label>
             <label>Vấn đề cần sửa<textarea name="description" minLength="10" maxLength="2000" rows="4" required placeholder="Ví dụ: vòi nước dưới bồn rửa bị rò liên tục…" /></label>
-            <label>Địa chỉ<input name="address" minLength="5" maxLength="300" required placeholder="Số nhà, đường, phường/quận" /></label>
+            {addresses.length > 0 && <label>Địa chỉ đã lưu<select name="addressId" defaultValue=""><option value="">Nhập địa chỉ khác</option>{addresses.map((address) => <option key={idOf(address)} value={idOf(address)}>{address.label}{address.isDefault ? ' · Mặc định' : ''} — {address.line1}, {address.district}</option>)}</select></label>}
+            <label>{addresses.length > 0 ? 'Hoặc nhập địa chỉ khác' : 'Địa chỉ'}<input name="address" minLength="5" maxLength="500" required={addresses.length === 0} placeholder="Số nhà, đường, phường/quận" /></label>
             <label>Thời gian mong muốn<input name="desiredAt" type="datetime-local" min={minDate} required /></label>
             <button className="button primary full" disabled={busy}>{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</button>
           </form>

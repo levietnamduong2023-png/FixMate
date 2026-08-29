@@ -12,6 +12,7 @@ import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import bookingRoutes from './routes/bookings.js';
 import notificationRoutes from './routes/notifications.js';
+import { addressRouter, profileRouter } from './routes/profile.js';
 import publicRoutes from './routes/public.js';
 import requestRoutes from './routes/requests.js';
 import technicianRoutes from './routes/technicians.js';
@@ -30,7 +31,7 @@ export function createApp() {
     response.json({
       status: mongoose.connection.readyState === 1 ? 'ok' : 'degraded',
       service: 'fixmate-api',
-      version: '0.2.0',
+      version: '0.3.0',
       database: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState] || 'unknown',
       time: new Date().toISOString(),
     });
@@ -50,6 +51,8 @@ export function createApp() {
   app.use('/api/requests', requestRoutes);
   app.use('/api/bookings', bookingRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/profile', profileRouter);
+  app.use('/api/addresses', addressRouter);
   app.use('/api/admin', adminRoutes);
 
   if (existsSync(clientDist)) {

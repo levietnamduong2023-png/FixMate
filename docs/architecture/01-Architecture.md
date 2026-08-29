@@ -77,7 +77,7 @@ sequenceDiagram
 ## 5. Security architecture
 
 - Mật khẩu băm bằng bcrypt với cost 12; mật khẩu không được trả về JSON và mặc định không được select.
-- JWT HS256 có issuer, audience và hạn dùng; token chỉ chứa user ID. Role được đọc lại từ database ở mỗi request nên thay đổi quyền có hiệu lực ngay.
+- JWT HS256 có issuer, audience, hạn dùng và `authVersion`; role được đọc lại từ database ở mỗi request nên đổi quyền, logout hoặc đổi/reset mật khẩu có hiệu lực thu hồi session ngay.
 - RBAC cho `CUSTOMER`, `TECHNICIAN`, `ADMIN`, kết hợp kiểm tra ownership ở cấp tài nguyên.
 - Zod kiểm tra input và Mongoose kiểm tra lần hai ở lớp persistence.
 - Helmet, CORS allow-list, giới hạn JSON 1 MB và rate limit riêng cho authentication.
@@ -110,5 +110,4 @@ flowchart LR
 - Chọn modular monolith thay vì microservices vì phạm vi V0.1 chưa cần chi phí vận hành phân tán.
 - Thanh toán hiện là adapter mô phỏng `MOCK_CARD`/`CASH`; không lưu dữ liệu thẻ.
 - Notification hiện lưu trong ứng dụng; email/push là điểm mở rộng.
-- Map, upload ảnh, OTP/quên mật khẩu và real-time tracking chưa triển khai trong MVP.
-
+- Map, upload ảnh, email delivery cho reset password và real-time tracking chưa triển khai trong MVP.

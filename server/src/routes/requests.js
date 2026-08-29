@@ -5,6 +5,7 @@ import { roles } from '../domain.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import {
   Booking,
+  Address,
   Quotation,
   RepairRequest,
   Service,
@@ -20,9 +21,13 @@ const router = Router();
 const requestSchema = z.object({
   serviceId: objectIdSchema,
   description: z.string().trim().min(10).max(2000),
-  address: z.string().trim().min(5).max(300),
+  address: z.string().trim().min(5).max(500).optional(),
+  addressId: objectIdSchema.optional(),
   desiredAt: z.coerce.date().refine((date) => date > new Date(), 'Thời gian mong muốn phải nằm trong tương lai'),
-}).strict();
+}).strict().refine((value) => value.address || value.addressId, {
+  message: 'Cần chọn địa chỉ đã lưu hoặc nhập địa chỉ sửa chữa.',
+  path: ['address'],
+});
 
 const quoteSchema = z.object({
   amount: z.number().int().min(10_000).max(1_000_000_000),
@@ -42,11 +47,20 @@ router.post('/', authorize(roles.CUSTOMER), asyncHandler(async (request, respons
     .populate('service', 'name basePrice');
   if (existing) return response.json({ request: existing, duplicate: true });
   if (!await Service.exists({ _id: input.serviceId, isActive: true })) throw notFound('Dịch vụ không tồn tại hoặc đã ngừng cung cấp.');
+  let address = input.address;
+  let addressRef = null;
+  if (input.addressId) {
+    const savedAddress = await Address.findOne({ _id: input.addressId, user: request.user._id }).lean();
+    if (!savedAddress) throw notFound('Không tìm thấy địa chỉ đã lưu.');
+    addressRef = savedAddress._id;
+    address = [savedAddress.line1, savedAddress.ward, savedAddress.district, savedAddress.city].join(', ');
+  }
   const repairRequest = await RepairRequest.create({
     customer: request.user._id,
     service: input.serviceId,
     description: input.description,
-    address: input.address,
+    address,
+    addressRef,
     desiredAt: input.desiredAt,
     idempotencyKey,
   });

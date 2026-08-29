@@ -11,6 +11,9 @@ export async function authenticate(request, _response, next) {
     const user = await User.findById(payload.sub);
     if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Phiên đăng nhập không còn hợp lệ.');
     if (user.status === 'LOCKED') throw new HttpError(423, 'ACCOUNT_LOCKED', 'Tài khoản đã bị khóa.');
+    if (payload.ver !== user.authVersion) {
+      throw new HttpError(401, 'SESSION_REVOKED', 'Phiên đăng nhập đã bị thu hồi.');
+    }
     request.user = user;
     next();
   } catch (error) {
@@ -27,4 +30,3 @@ export function authorize(...roles) {
     next();
   };
 }
-

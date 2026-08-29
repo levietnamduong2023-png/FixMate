@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, getToken, idOf, setToken } from './api.js';
+import AccountPanel from './components/AccountPanel.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import CustomerDashboard from './components/CustomerDashboard.jsx';
@@ -10,8 +11,10 @@ export default function App() {
   const [services, setServices] = useState([]);
   const [session, setSession] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [notifications, setNotifications] = useState(null);
   const [toast, setToast] = useState(null);
+  const [dataVersion, setDataVersion] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const flash = useCallback((message, type = 'success') => {
@@ -39,10 +42,17 @@ export default function App() {
     catch (error) { flash(error.message, 'error'); }
   }
 
-  function logout() {
+  function clearSession() {
     setToken(null);
     setSession(null);
     setNotifications(null);
+    setAccountOpen(false);
+  }
+
+  async function logout() {
+    try { await api('/auth/logout', { method: 'POST' }); }
+    catch { /* Always clear the local session, even if it is already revoked. */ }
+    clearSession();
   }
 
   if (loading) return <div className="app-loader"><div className="loader-mark">FM</div><p>Đang chuẩn bị FixMate…</p></div>;
@@ -57,19 +67,20 @@ export default function App() {
           <div className="nav-actions">
             {!user ? <><button className="text-button" onClick={() => setAuthOpen(true)}>Đăng nhập</button><button className="button dark" onClick={() => setAuthOpen(true)}>Bắt đầu</button></> : <>
               <div className="notification-wrap"><button className="icon-button bell" onClick={loadNotifications} aria-label="Thông báo">♢{notifications?.unread > 0 && <i>{notifications.unread}</i>}</button>{notifications && <div className="notification-popover"><div className="panel-heading-row"><h3>Thông báo</h3><button className="icon-button" onClick={() => setNotifications(null)}>×</button></div>{notifications.items.length === 0 ? <p className="muted">Chưa có thông báo.</p> : notifications.items.map((item) => <article key={idOf(item)} className={!item.isRead ? 'unread' : ''}><b>{item.title}</b><p>{item.message}</p></article>)}</div>}</div>
-              <div className="user-chip"><span>{user.name.slice(0, 1).toUpperCase()}</span><div><b>{user.name}</b><button onClick={logout}>Đăng xuất</button></div></div>
+              <div className="user-chip"><button className="avatar-button" onClick={() => setAccountOpen(true)} aria-label="Mở tài khoản">{user.name.slice(0, 1).toUpperCase()}</button><div><button className="account-name" onClick={() => setAccountOpen(true)}>{user.name}</button><button onClick={logout}>Đăng xuất</button></div></div>
             </>}
           </div>
         </div>
       </header>
 
       {!user && <PublicHome services={services} onStart={() => setAuthOpen(true)} />}
-      {user?.role === 'CUSTOMER' && <CustomerDashboard services={services} profile={session.technicianProfile} flash={flash} />}
+      {user?.role === 'CUSTOMER' && <CustomerDashboard services={services} profile={session.technicianProfile} dataVersion={dataVersion} flash={flash} />}
       {user?.role === 'TECHNICIAN' && <TechnicianDashboard profile={session.technicianProfile} flash={flash} refreshSession={refreshSession} />}
       {user?.role === 'ADMIN' && <AdminDashboard flash={flash} />}
 
       {!user && <footer className="site-footer" id="support"><div className="shell"><div className="brand inverse"><span>F</span>FixMate</div><p>Nền tảng kết nối sửa chữa tại nhà minh bạch và đáng tin cậy.</p><small>© 2026 FixMate. MVP theo SRS V0.1.</small></div></footer>}
       {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} onAuthenticated={() => { setAuthOpen(false); refreshSession(); }} />}
+      {accountOpen && session && <AccountPanel session={session} onClose={() => setAccountOpen(false)} onSessionChanged={refreshSession} onAddressesChanged={() => setDataVersion((value) => value + 1)} onSignedOut={clearSession} flash={flash} />}
       {toast && <div className={`toast ${toast.type}`} role="status">{toast.message}</div>}
     </div>
   );

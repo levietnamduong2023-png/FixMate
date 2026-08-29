@@ -54,6 +54,53 @@ test('complete customer-to-technician repair journey is protected and consistent
   }).expect(201);
   const customerToken = customerRegistration.body.token;
 
+  const updatedProfile = await request(app)
+    .patch('/api/profile')
+    .set(auth(customerToken))
+    .send({ name: 'Nguyễn Khách Hàng', phone: '0912345678' })
+    .expect(200);
+  assert.equal(updatedProfile.body.user.name, 'Nguyễn Khách Hàng');
+
+  const homeAddressResponse = await request(app)
+    .post('/api/addresses')
+    .set(auth(customerToken))
+    .send({
+      label: 'Nhà',
+      recipientName: 'Nguyễn Khách Hàng',
+      phone: '0912345678',
+      line1: '12 Nguyễn Huệ',
+      ward: 'Bến Nghé',
+      district: 'Quận 1',
+      city: 'TP.HCM',
+    })
+    .expect(201);
+  const homeAddressId = homeAddressResponse.body.address.id;
+  assert.equal(homeAddressResponse.body.address.isDefault, true);
+
+  const officeAddressResponse = await request(app)
+    .post('/api/addresses')
+    .set(auth(customerToken))
+    .send({
+      label: 'Công ty',
+      recipientName: 'Nguyễn Khách Hàng',
+      phone: '0912345678',
+      line1: '25 Lê Lợi',
+      ward: 'Bến Thành',
+      district: 'Quận 1',
+      city: 'TP.HCM',
+      isDefault: true,
+    })
+    .expect(201);
+  const officeAddressId = officeAddressResponse.body.address.id;
+  const addressList = await request(app).get('/api/addresses').set(auth(customerToken)).expect(200);
+  assert.equal(addressList.body.items.filter((item) => item.isDefault).length, 1);
+  assert.equal(addressList.body.items.find((item) => item.isDefault).id, officeAddressId);
+  await request(app).delete(`/api/addresses/${officeAddressId}`).set(auth(customerToken)).expect(204);
+  const addressesAfterDelete = await request(app).get('/api/addresses').set(auth(customerToken)).expect(200);
+  assert.equal(addressesAfterDelete.body.items.length, 1);
+  assert.equal(addressesAfterDelete.body.items[0].id, homeAddressId);
+  assert.equal(addressesAfterDelete.body.items[0].isDefault, true);
+
   await request(app).post('/api/auth/register').send({
     name: 'Nguyễn Khách',
     email: 'customer@fixmate.test',
@@ -89,7 +136,7 @@ test('complete customer-to-technician repair journey is protected and consistent
   const requestPayload = {
     serviceId: service.id,
     description: 'Ổ cắm trong phòng khách phát tia lửa khi sử dụng.',
-    address: '12 Nguyễn Huệ, Quận 1, TP.HCM',
+    addressId: homeAddressId,
     desiredAt,
   };
   const repairResponse = await request(app)
@@ -132,6 +179,12 @@ test('complete customer-to-technician repair journey is protected and consistent
     password: 'Intruder123',
   }).expect(201);
   await request(app).get(`/api/requests/${repairId}`).set(auth(intruder.body.token)).expect(403);
+  await request(app)
+    .post('/api/requests')
+    .set(auth(intruder.body.token))
+    .set('Idempotency-Key', 'intruder-address-attempt-001')
+    .send({ ...requestPayload, description: 'Thử dùng địa chỉ không thuộc tài khoản.' })
+    .expect(404);
 
   const quoteList = await request(app)
     .get(`/api/requests/${repairId}/quotes`)
@@ -207,4 +260,46 @@ test('complete customer-to-technician repair journey is protected and consistent
 
   const notifications = await request(app).get('/api/notifications').set(auth(customerToken)).expect(200);
   assert.ok(notifications.body.items.length > 0);
+
+  const forgotResponse = await request(app)
+    .post('/api/auth/forgot-password')
+    .send({ email: 'customer@fixmate.test' })
+    .expect(202);
+  assert.ok(forgotResponse.body.resetToken);
+  const unknownForgot = await request(app)
+    .post('/api/auth/forgot-password')
+    .send({ email: 'unknown@fixmate.test' })
+    .expect(202);
+  assert.equal(unknownForgot.body.message, forgotResponse.body.message);
+  assert.equal(unknownForgot.body.resetToken, undefined);
+
+  await request(app)
+    .post('/api/auth/reset-password')
+    .send({ token: forgotResponse.body.resetToken, newPassword: 'CustomerReset456' })
+    .expect(200);
+  await request(app)
+    .post('/api/auth/reset-password')
+    .send({ token: forgotResponse.body.resetToken, newPassword: 'AnotherPass789' })
+    .expect(400);
+  await request(app).get('/api/auth/me').set(auth(customerToken)).expect(401);
+  await request(app).post('/api/auth/login').send({ email: 'customer@fixmate.test', password: 'Customer123' }).expect(401);
+  const relogin = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'customer@fixmate.test', password: 'CustomerReset456' })
+    .expect(200);
+
+  await request(app)
+    .post('/api/auth/change-password')
+    .set(auth(relogin.body.token))
+    .send({ currentPassword: 'CustomerReset456', newPassword: 'CustomerFinal789' })
+    .expect(200);
+  await request(app).get('/api/auth/me').set(auth(relogin.body.token)).expect(401);
+
+  const finalLogin = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'customer@fixmate.test', password: 'CustomerFinal789' })
+    .expect(200);
+  await request(app).post('/api/auth/logout').set(auth(finalLogin.body.token)).expect(204);
+  await request(app).get('/api/auth/me').set(auth(finalLogin.body.token)).expect(401);
+
 });

@@ -14,7 +14,7 @@ Kho mã nguồn baseline chỉ có README hai dòng cùng hai thư mục `client
 |---|---:|---|
 | Chất lượng SRS V0.1 | **7.1/10** | Phạm vi tốt, đặc tả chi tiết và khả năng kiểm thử còn thiếu |
 | Hệ thống baseline | **0.2/10** | Chưa có implementation hoặc runtime |
-| Hệ thống sau cải thiện | **8.6/10** | MVP end-to-end vững; chưa phải production hoàn chỉnh |
+| Hệ thống sau cải thiện V0.3 | **8.9/10** | MVP end-to-end, account recovery và address book; chưa phải production hoàn chỉnh |
 
 ## 2. Đánh giá SRS V0.1
 
@@ -62,20 +62,20 @@ Rubric đánh giá implementation, không cộng điểm riêng cho ý tưởng 
 |---|---:|---:|---:|---|
 | Functional coverage | 25 | 0 | 21 | 13 nhóm endpoint và 3 dashboard theo role |
 | Architecture/code quality | 15 | 1 | 13 | React/Express module, middleware, domain, models |
-| Data model/integrity | 10 | 0 | 9 | 11 Mongoose model, index, unique, transaction |
-| Security/access control | 15 | 0 | 13 | bcrypt, JWT, RBAC, ownership, Zod, Helmet, rate limit |
+| Data model/integrity | 10 | 0 | 9.5 | 13 Mongoose model, index, unique, TTL và transaction |
+| Security/access control | 15 | 0 | 14 | bcrypt, JWT revocation version, reset TTL, RBAC, ownership, Zod, Helmet, rate limit |
 | Reliability/performance | 10 | 0 | 8.5 | idempotency, state machine, pagination, indexes, graceful shutdown |
 | UX/accessibility | 10 | 0 | 8 | responsive UI và workspace riêng theo actor |
 | Testing/verification | 10 | 0 | 8.5 | unit + integration replica set, full journey, production build |
 | Documentation/deployment | 5 | 1 | 5 | README, Docker, ERD, architecture, API, wireframe |
-| **Tổng / 100** | **100** | **2** | **86** | |
+| **Tổng / 100** | **100** | **2** | **89** | |
 
 ## 4. Traceability SRS → implementation
 
 | Module SRS | Trạng thái | Implementation |
 |---|---|---|
-| Tài khoản/xác thực | Partial | Register, login, JWT, lock; chưa quên/đổi mật khẩu |
-| Hồ sơ khách hàng | Partial | Thông tin account; chưa có address book/profile update |
+| Tài khoản/xác thực | Implemented core | Register, login/logout revoke, forgot/reset/change password, lock; email delivery còn là adapter |
+| Hồ sơ khách hàng | Implemented core | Xem/cập nhật account, address book, default address và ownership |
 | Hồ sơ thợ | Implemented core | Apply, approval, skill, availability, public profile/rating |
 | Dịch vụ | Implemented core | Public search/list và Admin create/update/deactivate |
 | Yêu cầu sửa chữa | Implemented core | Create/list/detail/cancel, validation thời gian, idempotency |
@@ -119,8 +119,8 @@ Rubric đánh giá implementation, không cộng điểm riêng cho ý tưởng 
 ### P0 trước production
 
 1. Tích hợp payment provider thật, webhook verification, refund và reconciliation.
-2. Forgot/change password, email/phone verification, refresh/revoke token.
-3. Chốt chính sách hủy/hoàn tiền/hoa hồng/bảo hành và thêm acceptance tests.
+2. Tích hợp email delivery, email/phone verification và refresh-token rotation nếu cần session dài hạn.
+3. Phê duyệt các quyết định còn mở về hủy/hoàn tiền/hoa hồng/bảo hành.
 4. Object storage cho ảnh, type/size limit, signed URL và malware scan.
 5. SLO, centralized log, metrics, alert, backup/restore drill và secret manager.
 

@@ -31,6 +31,10 @@ Response lỗi chuẩn:
 | POST | `/auth/register` | Public | Đăng ký Customer |
 | POST | `/auth/login` | Public | Đăng nhập, nhận JWT |
 | GET | `/auth/me` | Authenticated | User và hồ sơ thợ hiện tại |
+| POST | `/auth/logout` | Authenticated | Thu hồi toàn bộ token hiện tại của account |
+| POST | `/auth/change-password` | Authenticated | Đổi mật khẩu và thu hồi session cũ |
+| POST | `/auth/forgot-password` | Public | Tạo reset token 15 phút, response chống enumeration |
+| POST | `/auth/reset-password` | Public | Dùng token một lần để đặt mật khẩu mới |
 | GET | `/services?q=` | Public | Danh sách/tìm dịch vụ đang hoạt động |
 | GET | `/technicians?serviceId=&area=` | Public | Tìm thợ đã duyệt và đang nhận đơn |
 | GET | `/technicians/:id` | Public | Hồ sơ và đánh giá công khai |
@@ -42,6 +46,17 @@ Response lỗi chuẩn:
 | POST | `/technicians/apply` | Customer | Gửi hồ sơ thợ |
 | PATCH | `/technicians/availability` | Technician | Bật/tắt nhận đơn |
 | GET | `/technicians/opportunities` | Technician | Yêu cầu khớp chuyên môn |
+
+### Customer profile và address book
+
+| Method | Endpoint | Role | Mô tả |
+|---|---|---|---|
+| GET | `/profile` | Authenticated | Xem hồ sơ account hiện tại |
+| PATCH | `/profile` | Authenticated | Cập nhật tên và số điện thoại |
+| GET | `/addresses` | Authenticated owner | Danh sách địa chỉ của account |
+| POST | `/addresses` | Authenticated owner | Tạo địa chỉ; địa chỉ đầu tiên tự mặc định |
+| PATCH | `/addresses/:id` | Address owner | Cập nhật hoặc đặt mặc định |
+| DELETE | `/addresses/:id` | Address owner | Xóa; tự chọn mặc định mới khi cần |
 
 ### Repair request và quotation
 
@@ -113,10 +128,12 @@ Idempotency-Key: 1dc58934-44f8-46b4-b099-6838dca2d584
 {
   "serviceId": "66d000000000000000000001",
   "description": "Vòi nước dưới bồn rửa bị rò liên tục.",
-  "address": "12 Nguyễn Huệ, Quận 1, TP.HCM",
+  "addressId": "66d000000000000000000002",
   "desiredAt": "2026-09-02T09:00:00.000Z"
 }
 ```
+
+`addressId` có thể thay bằng `address` nhập thủ công. Khi dùng địa chỉ đã lưu, API xác minh ownership và lưu snapshot vào RepairRequest.
 
 Gửi báo giá:
 
@@ -154,4 +171,3 @@ Thanh toán mô phỏng:
 | 422 | Input không đạt validation |
 | 423 | Tài khoản bị khóa |
 | 429 | Vượt rate limit |
-

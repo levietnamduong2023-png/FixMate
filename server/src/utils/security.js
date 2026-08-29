@@ -12,8 +12,8 @@ export function comparePassword(password, hash) {
   return bcrypt.compare(password, hash);
 }
 
-export function signAccessToken(userId) {
-  return jwt.sign({ sub: userId.toString() }, config.jwtSecret, {
+export function signAccessToken(userId, authVersion = 0) {
+  return jwt.sign({ sub: userId.toString(), ver: authVersion }, config.jwtSecret, {
     algorithm: 'HS256',
     expiresIn: config.tokenTtlSeconds,
     issuer: 'fixmate-api',
@@ -40,4 +40,3 @@ export function publicUser(user) {
     createdAt: user.createdAt,
   };
 }
-

@@ -25,6 +25,7 @@ const userSchema = new Schema({
   phone: { type: String, trim: true, maxlength: 20, default: null },
   role: { type: String, enum: Object.values(roles), default: roles.CUSTOMER, index: true },
   status: { type: String, enum: ['ACTIVE', 'LOCKED'], default: 'ACTIVE', index: true },
+  authVersion: { type: Number, default: 0, min: 0 },
 }, baseOptions);
 
 const serviceSchema = new Schema({
@@ -51,7 +52,8 @@ const repairRequestSchema = new Schema({
   customer: { type: objectId, ref: 'User', required: true, index: true },
   service: { type: objectId, ref: 'Service', required: true, index: true },
   description: { type: String, required: true, trim: true, minlength: 10, maxlength: 2000 },
-  address: { type: String, required: true, trim: true, minlength: 5, maxlength: 300 },
+  address: { type: String, required: true, trim: true, minlength: 5, maxlength: 500 },
+  addressRef: { type: objectId, ref: 'Address', default: null },
   desiredAt: { type: Date, required: true, index: true },
   status: {
     type: String,
@@ -63,6 +65,33 @@ const repairRequestSchema = new Schema({
 }, baseOptions);
 repairRequestSchema.index({ customer: 1, idempotencyKey: 1 }, { unique: true });
 repairRequestSchema.index({ service: 1, status: 1, desiredAt: 1 });
+
+const addressSchema = new Schema({
+  user: { type: objectId, ref: 'User', required: true, index: true },
+  label: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
+  recipientName: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
+  phone: { type: String, required: true, trim: true, minlength: 8, maxlength: 20 },
+  line1: { type: String, required: true, trim: true, minlength: 3, maxlength: 150 },
+  ward: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
+  district: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
+  city: { type: String, required: true, trim: true, minlength: 2, maxlength: 100 },
+  latitude: { type: Number, min: -90, max: 90, default: null },
+  longitude: { type: Number, min: -180, max: 180, default: null },
+  isDefault: { type: Boolean, default: false, index: true },
+}, baseOptions);
+addressSchema.index({ user: 1, createdAt: -1 });
+addressSchema.index(
+  { user: 1, isDefault: 1 },
+  { unique: true, partialFilterExpression: { isDefault: true } },
+);
+
+const passwordResetTokenSchema = new Schema({
+  user: { type: objectId, ref: 'User', required: true, index: true },
+  tokenHash: { type: String, required: true, unique: true, select: false },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  usedAt: { type: Date, default: null },
+}, baseOptions);
+passwordResetTokenSchema.index({ user: 1, usedAt: 1 });
 
 const quotationSchema = new Schema({
   request: { type: objectId, ref: 'RepairRequest', required: true, index: true },
@@ -141,6 +170,8 @@ export const User = models.User || model('User', userSchema);
 export const Service = models.Service || model('Service', serviceSchema);
 export const TechnicianProfile = models.TechnicianProfile || model('TechnicianProfile', technicianProfileSchema);
 export const RepairRequest = models.RepairRequest || model('RepairRequest', repairRequestSchema);
+export const Address = models.Address || model('Address', addressSchema);
+export const PasswordResetToken = models.PasswordResetToken || model('PasswordResetToken', passwordResetTokenSchema);
 export const Quotation = models.Quotation || model('Quotation', quotationSchema);
 export const Booking = models.Booking || model('Booking', bookingSchema);
 export const Payment = models.Payment || model('Payment', paymentSchema);
@@ -148,4 +179,3 @@ export const Review = models.Review || model('Review', reviewSchema);
 export const Complaint = models.Complaint || model('Complaint', complaintSchema);
 export const Notification = models.Notification || model('Notification', notificationSchema);
 export const AuditLog = models.AuditLog || model('AuditLog', auditLogSchema);
-
