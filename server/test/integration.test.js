@@ -1,0 +1,210 @@
+import assert from 'node:assert/strict';
+import { after, before, test } from 'node:test';
+import mongoose from 'mongoose';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import request from 'supertest';
+import { app } from '../src/app.js';
+import { Service, User } from '../src/models/index.js';
+import { hashPassword } from '../src/utils/security.js';
+
+let replicaSet;
+let service;
+let adminToken;
+
+const auth = (token) => ({ Authorization: `Bearer ${token}` });
+
+before(async () => {
+  replicaSet = await MongoMemoryReplSet.create({
+    replSet: { count: 1, storageEngine: 'wiredTiger' },
+  });
+  await mongoose.connect(replicaSet.getUri(), { dbName: 'fixmate_test' });
+  await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
+  service = await Service.create({
+    name: 'Điện dân dụng',
+    description: 'Sửa chữa và kiểm tra hệ thống điện trong nhà',
+    basePrice: 150000,
+  });
+  await User.create({
+    name: 'Test Admin',
+    email: 'admin@fixmate.test',
+    passwordHash: await hashPassword('AdminPass123'),
+    role: 'ADMIN',
+  });
+  const login = await request(app).post('/api/auth/login').send({ email: 'admin@fixmate.test', password: 'AdminPass123' });
+  adminToken = login.body.token;
+}, { timeout: 180_000 });
+
+after(async () => {
+  await mongoose.disconnect();
+  if (replicaSet) await replicaSet.stop();
+}, { timeout: 60_000 });
+
+test('health endpoint exposes database readiness', async () => {
+  const response = await request(app).get('/api/health').expect(200);
+  assert.equal(response.body.status, 'ok');
+  assert.equal(response.body.database, 'connected');
+});
+
+test('complete customer-to-technician repair journey is protected and consistent', { timeout: 90_000 }, async () => {
+  const customerRegistration = await request(app).post('/api/auth/register').send({
+    name: 'Nguyễn Khách',
+    email: 'customer@fixmate.test',
+    password: 'Customer123',
+    phone: '0901234567',
+  }).expect(201);
+  const customerToken = customerRegistration.body.token;
+
+  await request(app).post('/api/auth/register').send({
+    name: 'Nguyễn Khách',
+    email: 'customer@fixmate.test',
+    password: 'Customer123',
+  }).expect(409);
+
+  const technicianRegistration = await request(app).post('/api/auth/register').send({
+    name: 'Trần Thợ',
+    email: 'technician@fixmate.test',
+    password: 'Technician123',
+  }).expect(201);
+  const technicianId = technicianRegistration.body.user.id;
+  const technicianToken = technicianRegistration.body.token;
+
+  await request(app)
+    .post('/api/technicians/apply')
+    .set(auth(technicianToken))
+    .send({
+      serviceIds: [service.id],
+      experienceYears: 7,
+      bio: 'Thợ điện dân dụng có kinh nghiệm xử lý sự cố tại nhà.',
+      area: 'Quận 1, TP.HCM',
+    })
+    .expect(201);
+
+  await request(app)
+    .patch(`/api/admin/technicians/${technicianId}/approval`)
+    .set(auth(adminToken))
+    .send({ status: 'APPROVED' })
+    .expect(200);
+
+  const desiredAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  const requestPayload = {
+    serviceId: service.id,
+    description: 'Ổ cắm trong phòng khách phát tia lửa khi sử dụng.',
+    address: '12 Nguyễn Huệ, Quận 1, TP.HCM',
+    desiredAt,
+  };
+  const repairResponse = await request(app)
+    .post('/api/requests')
+    .set(auth(customerToken))
+    .set('Idempotency-Key', 'repair-request-journey-001')
+    .send(requestPayload)
+    .expect(201);
+  const repairId = repairResponse.body.request.id;
+
+  const duplicate = await request(app)
+    .post('/api/requests')
+    .set(auth(customerToken))
+    .set('Idempotency-Key', 'repair-request-journey-001')
+    .send(requestPayload)
+    .expect(200);
+  assert.equal(duplicate.body.duplicate, true);
+  assert.equal(duplicate.body.request.id, repairId);
+
+  const opportunities = await request(app)
+    .get('/api/technicians/opportunities')
+    .set(auth(technicianToken))
+    .expect(200);
+  assert.equal(opportunities.body.items.some((item) => item._id === repairId || item.id === repairId), true);
+
+  const quoteResponse = await request(app)
+    .post(`/api/requests/${repairId}/quotes`)
+    .set(auth(technicianToken))
+    .send({
+      amount: 320000,
+      note: 'Bao gồm kiểm tra và thay ổ cắm tiêu chuẩn.',
+      validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    })
+    .expect(201);
+  const quoteId = quoteResponse.body.quotation.id;
+
+  const intruder = await request(app).post('/api/auth/register').send({
+    name: 'Người Không Liên Quan',
+    email: 'intruder@fixmate.test',
+    password: 'Intruder123',
+  }).expect(201);
+  await request(app).get(`/api/requests/${repairId}`).set(auth(intruder.body.token)).expect(403);
+
+  const quoteList = await request(app)
+    .get(`/api/requests/${repairId}/quotes`)
+    .set(auth(customerToken))
+    .expect(200);
+  assert.equal(quoteList.body.items.length, 1);
+
+  const bookingResponse = await request(app)
+    .post(`/api/requests/quotes/${quoteId}/accept`)
+    .set(auth(customerToken))
+    .expect(201);
+  const bookingId = bookingResponse.body.booking.id;
+
+  await request(app)
+    .patch(`/api/bookings/${bookingId}/status`)
+    .set(auth(technicianToken))
+    .send({ status: 'COMPLETED' })
+    .expect(409);
+
+  for (const status of ['TECHNICIAN_ON_THE_WAY', 'IN_PROGRESS', 'COMPLETED']) {
+    await request(app)
+      .patch(`/api/bookings/${bookingId}/status`)
+      .set(auth(technicianToken))
+      .send({ status })
+      .expect(200);
+  }
+
+  const payment = await request(app)
+    .post(`/api/bookings/${bookingId}/payments`)
+    .set(auth(customerToken))
+    .set('Idempotency-Key', 'payment-journey-001')
+    .send({ method: 'MOCK_CARD' })
+    .expect(201);
+  assert.equal(payment.body.payment.status, 'PAID');
+
+  const repeatedPayment = await request(app)
+    .post(`/api/bookings/${bookingId}/payments`)
+    .set(auth(customerToken))
+    .set('Idempotency-Key', 'payment-journey-001')
+    .send({ method: 'MOCK_CARD' })
+    .expect(200);
+  assert.equal(repeatedPayment.body.duplicate, true);
+
+  await request(app)
+    .post(`/api/bookings/${bookingId}/reviews`)
+    .set(auth(customerToken))
+    .send({ rating: 5, comment: 'Đến đúng giờ, sửa nhanh và giải thích rõ ràng.' })
+    .expect(201);
+
+  const publicProfile = await request(app).get(`/api/technicians/${technicianId}`).expect(200);
+  assert.equal(publicProfile.body.technician.ratingAverage, 5);
+  assert.equal(publicProfile.body.reviews.length, 1);
+
+  const complaintResponse = await request(app)
+    .post(`/api/bookings/${bookingId}/complaints`)
+    .set(auth(customerToken))
+    .send({
+      subject: 'Cần làm rõ phạm vi bảo hành',
+      detail: 'Tôi muốn xác nhận lại thời gian bảo hành cho linh kiện vừa thay.',
+    })
+    .expect(201);
+  const complaintId = complaintResponse.body.complaint.id;
+
+  await request(app)
+    .patch(`/api/admin/complaints/${complaintId}`)
+    .set(auth(adminToken))
+    .send({ status: 'RESOLVED', resolution: 'Đã xác nhận bảo hành linh kiện trong ba tháng.' })
+    .expect(200);
+
+  const metrics = await request(app).get('/api/admin/metrics').set(auth(adminToken)).expect(200);
+  assert.equal(metrics.body.bookings, 1);
+  assert.equal(metrics.body.paymentsPaid, 1);
+
+  const notifications = await request(app).get('/api/notifications').set(auth(customerToken)).expect(200);
+  assert.ok(notifications.body.items.length > 0);
+});

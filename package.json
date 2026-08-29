@@ -1,0 +1,40 @@
+{
+  "name": "fixmate",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Home Repair Service Platform MVP",
+  "scripts": {
+    "start": "node server/src/server.js",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch server/src/server.js",
+    "dev:client": "vite --config client/vite.config.js",
+    "build": "vite build --config client/vite.config.js",
+    "test": "node --test server/test/domain.test.js server/test/integration.test.js",
+    "check": "node --check server/src/app.js && node --check server/src/models/index.js && node --check server/src/routes/requests.js && npm run build",
+    "seed": "node server/src/seed.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.5.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "mongodb-memory-server": "^11.2.0",
+    "supertest": "^7.2.2",
+    "vite": "^8.2.2"
+  }
+}
