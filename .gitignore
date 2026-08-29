@@ -1,6 +1,6 @@
 node_modules/
 data/
-client/dist/
+FE/dist/
 .env
 *.log
 coverage/

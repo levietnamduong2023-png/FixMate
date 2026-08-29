@@ -5,14 +5,14 @@
   "type": "module",
   "description": "Home Repair Service Platform MVP",
   "scripts": {
-    "start": "node server/src/server.js",
-    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "node --watch server/src/server.js",
-    "dev:client": "vite --config client/vite.config.js",
-    "build": "vite build --config client/vite.config.js",
-    "test": "node --test server/test/domain.test.js server/test/integration.test.js",
-    "check": "node --check server/src/app.js && node --check server/src/models/index.js && node --check server/src/routes/requests.js && npm run build",
-    "seed": "node server/src/seed.js"
+    "start": "node BE/src/server.js",
+    "dev": "concurrently -n BE,FE -c cyan,magenta \"npm:dev:be\" \"npm:dev:fe\"",
+    "dev:be": "node --watch BE/src/server.js",
+    "dev:fe": "vite --config FE/vite.config.js",
+    "build": "vite build --config FE/vite.config.js",
+    "test": "node --test BE/test/domain.test.js BE/test/integration.test.js",
+    "check": "node --check BE/src/app.js && node --check BE/src/models/index.js && node --check BE/src/routes/requests.js && npm run build",
+    "seed": "node BE/src/seed.js"
   },
   "engines": {
     "node": ">=22"

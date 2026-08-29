@@ -8,7 +8,7 @@
 
 SRS V0.1 xác định đúng bài toán, actor, 13 module và luồng end-to-end. Tuy nhiên đây vẫn là draft: nhiều use case mới có tên, NFR chưa đo được, policy thanh toán/hủy/hoa hồng còn TBD và interface bên ngoài chưa có contract.
 
-Kho mã nguồn baseline chỉ có README hai dòng cùng hai thư mục `client`/`server` trống; chưa có hệ thống chạy được. Bản cải thiện dựng một MERN MVP có API, database, giao diện theo vai trò, transaction, kiểm thử và tài liệu thiết kế.
+Kho mã nguồn baseline chỉ có README hai dòng cùng hai thư mục `client`/`server` trống (nay được chuẩn hóa thành `FE`/`BE`); chưa có hệ thống chạy được. Bản cải thiện dựng một MERN MVP có API, database, giao diện theo vai trò, transaction, kiểm thử và tài liệu thiết kế.
 
 | Đối tượng | Điểm | Nhận định |
 |---|---:|---|

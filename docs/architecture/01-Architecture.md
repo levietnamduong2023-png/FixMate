@@ -44,13 +44,13 @@ flowchart TB
 
 | Layer | Trách nhiệm | Vị trí |
 |---|---|---|
-| UI | Landing page và dashboard theo vai trò | `client/src` |
-| HTTP | Router và response REST | `server/src/routes` |
-| Middleware | JWT, RBAC, error normalization | `server/src/middleware` |
-| Domain | State machine dùng chung | `server/src/domain.js` |
-| Application service | Notification và audit | `server/src/services` |
-| Persistence | Schema, relationship, index | `server/src/models/index.js` |
-| Runtime | Kết nối, graceful shutdown, seed | `server/src/server.js`, `seed.js` |
+| UI | Landing page và dashboard theo vai trò | `FE/src` |
+| HTTP | Router và response REST | `BE/src/routes` |
+| Middleware | JWT, RBAC, error normalization | `BE/src/middleware` |
+| Domain | State machine dùng chung | `BE/src/domain.js` |
+| Application service | Notification và audit | `BE/src/services` |
+| Persistence | Schema, relationship, index | `BE/src/models/index.js` |
+| Runtime | Kết nối, graceful shutdown, seed | `BE/src/server.js`, `BE/src/seed.js` |
 
 ## 4. Luồng nghiệp vụ chính
 

@@ -18,7 +18,7 @@ import requestRoutes from './routes/requests.js';
 import technicianRoutes from './routes/technicians.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const clientDist = resolve(currentDirectory, '../../client/dist');
+const frontendDist = resolve(currentDirectory, '../../FE/dist');
 
 export function createApp() {
   const app = express();
@@ -55,11 +55,11 @@ export function createApp() {
   app.use('/api/addresses', addressRouter);
   app.use('/api/admin', adminRoutes);
 
-  if (existsSync(clientDist)) {
-    app.use(express.static(clientDist, { maxAge: config.nodeEnv === 'production' ? '1d' : 0 }));
+  if (existsSync(frontendDist)) {
+    app.use(express.static(frontendDist, { maxAge: config.nodeEnv === 'production' ? '1d' : 0 }));
     app.use((request, response, next) => {
       if (request.path.startsWith('/api/')) return next();
-      return response.sendFile(resolve(clientDist, 'index.html'));
+      return response.sendFile(resolve(frontendDist, 'index.html'));
     });
   }
 
