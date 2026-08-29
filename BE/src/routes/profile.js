@@ -2,14 +2,24 @@ import mongoose from 'mongoose';
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
-import { Address, User } from '../models/index.js';
+import {
+  Address,
+  Booking,
+  Complaint,
+  ConsentRecord,
+  RepairRequest,
+  Review,
+  Session,
+  User,
+} from '../models/index.js';
 import { asyncHandler } from '../utils/async-handler.js';
-import { conflict, notFound } from '../utils/http-error.js';
-import { publicUser } from '../utils/security.js';
-import { validate } from '../utils/validation.js';
+import { conflict, HttpError, notFound } from '../utils/http-error.js';
+import { comparePassword, publicUser } from '../utils/security.js';
+import { objectIdParam, validate } from '../utils/validation.js';
 
 export const profileRouter = Router();
 export const addressRouter = Router();
+addressRouter.param('id', objectIdParam);
 
 const createAddressSchema = z.object({
   label: z.string().trim().min(2).max(50),
@@ -49,6 +59,74 @@ profileRouter.patch('/', asyncHandler(async (request, response) => {
     { returnDocument: 'after', runValidators: true },
   );
   response.json({ user: publicUser(user) });
+}));
+
+profileRouter.get('/consents', asyncHandler(async (request, response) => {
+  const items = await ConsentRecord.find({ user: request.user._id }).sort({ recordedAt: -1 }).lean();
+  response.json({ items });
+}));
+
+profileRouter.put('/consents/:type', asyncHandler(async (request, response) => {
+  const input = validate(z.object({
+    granted: z.boolean(),
+    version: z.string().trim().min(1).max(40).default('0.3'),
+  }).strict(), request.body);
+  const type = validate(z.enum(['LOCATION', 'MEDIA', 'MARKETING']), request.params.type);
+  const consent = await ConsentRecord.findOneAndUpdate(
+    { user: request.user._id, type, version: input.version },
+    { granted: input.granted, recordedAt: new Date() },
+    { upsert: true, returnDocument: 'after', runValidators: true },
+  );
+  response.json({ consent });
+}));
+
+profileRouter.get('/export', asyncHandler(async (request, response) => {
+  const [addresses, requests, bookings, reviews, complaints, consents] = await Promise.all([
+    Address.find({ user: request.user._id }).lean(),
+    RepairRequest.find({ customer: request.user._id }).lean(),
+    Booking.find({ $or: [{ customer: request.user._id }, { technician: request.user._id }] }).lean(),
+    Review.find({ customer: request.user._id }).lean(),
+    Complaint.find({ customer: request.user._id }).lean(),
+    ConsentRecord.find({ user: request.user._id }).lean(),
+  ]);
+  response.json({
+    exportedAt: new Date().toISOString(),
+    profile: publicUser(request.user),
+    addresses,
+    requests,
+    bookings,
+    reviews,
+    complaints,
+    consents,
+  });
+}));
+
+profileRouter.delete('/', asyncHandler(async (request, response) => {
+  const input = validate(z.object({ currentPassword: z.string().min(1).max(128) }).strict(), request.body);
+  const user = await User.findById(request.user._id).select('+passwordHash');
+  if (!user || !await comparePassword(input.currentPassword, user.passwordHash)) {
+    throw new HttpError(401, 'CURRENT_PASSWORD_INVALID', 'Mật khẩu hiện tại không chính xác.');
+  }
+  await mongoose.connection.transaction(async (session) => {
+    await User.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            name: 'Tài khoản đã xóa',
+            email: 'deleted+' + user._id.toString() + '@fixmate.invalid',
+            phone: null,
+            status: 'DELETED',
+            role: 'CUSTOMER',
+          },
+          $inc: { authVersion: 1 },
+        },
+        { session },
+      );
+    await Address.deleteMany({ user: user._id }, { session });
+    await Session.updateMany({ user: user._id, revokedAt: null }, { revokedAt: new Date() }, { session });
+  });
+  response.clearCookie('fixmate_refresh', { path: '/api/auth' });
+  response.status(204).end();
 }));
 
 addressRouter.use(authenticate);

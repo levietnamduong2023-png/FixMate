@@ -12,6 +12,24 @@ export function createNotification(user, type, title, message, entityType, entit
 }
 
 export function writeAudit(actor, action, entityType, entityId, detail = {}, options = {}) {
-  return AuditLog.create([{ actor, action, entityType, entityId, detail }], options);
+  const {
+    before = null,
+    after = null,
+    reason = '',
+    requestId = null,
+    ipHash = null,
+    ...safeDetail
+  } = detail;
+  return AuditLog.create([{
+    actor,
+    action,
+    entityType,
+    entityId,
+    detail: safeDetail,
+    before,
+    after,
+    reason,
+    requestId,
+    ipHash,
+  }], options);
 }
-

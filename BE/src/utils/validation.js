@@ -19,12 +19,21 @@ export function validate(schema, value) {
 }
 
 export function pageQuery(query) {
+  const parsedLimit = Number(query.limit);
+  const parsedPage = Number(query.page);
   return {
-    limit: Math.min(Math.max(Number(query.limit) || 20, 1), 100),
-    page: Math.max(Number(query.page) || 1, 1),
+    limit: Math.min(Math.max(Number.isInteger(parsedLimit) ? parsedLimit : 20, 1), 100),
+    page: Math.max(Number.isInteger(parsedPage) ? parsedPage : 1, 1),
   };
 }
 
 export function escapeRegex(value = '') {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function objectIdParam(request, _response, next, value) {
+  if (!objectIdSchema.safeParse(value).success) {
+    return next(new HttpError(400, 'INVALID_ID', 'Mã định danh không hợp lệ.'));
+  }
+  return next();
 }
