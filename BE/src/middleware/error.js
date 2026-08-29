@@ -4,7 +4,7 @@ export function notFoundHandler(request, _response, next) {
   next(new HttpError(404, 'NOT_FOUND', `Không tìm thấy ${request.method} ${request.originalUrl}.`));
 }
 
-export function errorHandler(error, _request, response, _next) {
+export function errorHandler(error, request, response, _next) {
   let handled = error;
   if (error?.code === 11000) {
     handled = new HttpError(409, 'CONFLICT', 'Dữ liệu đã tồn tại hoặc thao tác đã được thực hiện.');
@@ -18,13 +18,22 @@ export function errorHandler(error, _request, response, _next) {
   }
 
   const status = handled.status || 500;
-  if (status >= 500) console.error(error);
+  if (status >= 500) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'fixmate-api',
+      requestId: request.id,
+      code: handled.code || 'INTERNAL_ERROR',
+      message: error?.message || 'Unknown error',
+    }));
+  }
   response.status(status).json({
     error: {
       code: handled.code || 'INTERNAL_ERROR',
       message: status >= 500 ? 'Hệ thống gặp lỗi. Vui lòng thử lại.' : handled.message,
       ...(handled.details ? { details: handled.details } : {}),
+      requestId: request.id,
     },
   });
 }
-
