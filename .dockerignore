@@ -1,0 +1,7 @@
+.git
+.env
+node_modules
+FE/dist
+data
+coverage
+*.log
