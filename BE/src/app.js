@@ -8,28 +8,45 @@ import helmet from 'helmet';
 import mongoose from 'mongoose';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { observability } from './middleware/observability.js';
 import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import bookingRoutes from './routes/bookings.js';
+import complaintRoutes from './routes/complaints.js';
 import notificationRoutes from './routes/notifications.js';
 import { addressRouter, profileRouter } from './routes/profile.js';
 import publicRoutes from './routes/public.js';
 import requestRoutes from './routes/requests.js';
 import technicianRoutes from './routes/technicians.js';
+import webhookRoutes from './routes/webhooks.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const frontendDist = resolve(currentDirectory, '../../FE/dist');
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
   app.disable('x-powered-by');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
-  app.use(cors({ origin: config.clientOrigin, credentials: false }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin || config.clientOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('CORS origin không được phép.'));
+    },
+    credentials: true,
+  }));
+  app.use(observability);
+  app.use(express.json({
+    limit: '1mb',
+    verify(request, _response, buffer) {
+      request.rawBody = buffer.toString('utf8');
+    },
+  }));
 
   app.get('/api/health', (_request, response) => {
-    response.json({
-      status: mongoose.connection.readyState === 1 ? 'ok' : 'degraded',
+    const ready = mongoose.connection.readyState === 1;
+    response.status(ready ? 200 : 503).json({
+      status: ready ? 'ok' : 'degraded',
       service: 'fixmate-api',
       version: '0.3.0',
       database: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState] || 'unknown',
@@ -46,10 +63,12 @@ export function createApp() {
   });
 
   app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api/webhooks', webhookRoutes);
   app.use('/api/technicians', technicianRoutes);
   app.use('/api', publicRoutes);
   app.use('/api/requests', requestRoutes);
   app.use('/api/bookings', bookingRoutes);
+  app.use('/api/complaints', complaintRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/profile', profileRouter);
   app.use('/api/addresses', addressRouter);

@@ -1,6 +1,6 @@
 # FixMate
 
-FixMate là nền tảng MERN kết nối khách hàng với thợ sửa chữa tại nhà, được triển khai theo [SRS V0.2](docs/SRS/SRS%20V0.2%20FixMate.md) trên nền phạm vi của SRS V0.1.
+FixMate là nền tảng MERN kết nối khách hàng với thợ sửa chữa tại nhà, được triển khai theo baseline hợp nhất [SRS V0.3](docs/SRS/SRS%20V0.3%20FixMate.md).
 
 ## Công nghệ
 
@@ -9,7 +9,7 @@ FixMate là nền tảng MERN kết nối khách hàng với thợ sửa chữa 
 - React + Vite: giao diện responsive riêng cho Customer, Technician và Admin.
 - Node Test Runner + Supertest: unit/API integration tests.
 
-V0.3 bổ sung reset/đổi mật khẩu có thu hồi session, Customer profile, address book và address snapshot cho yêu cầu sửa chữa.
+V0.3 bổ sung session rotation, privacy theo scope, structured address snapshot, matching theo khu vực/lịch, completion hai bước, payment adapter/webhook/refund, outbox, observability và các UC còn thiếu.
 
 ## Chạy nhanh bằng Docker
 
@@ -44,7 +44,7 @@ npm run check
 
 ## Tài liệu
 
-- [SRS V0.2](docs/SRS/SRS%20V0.2%20FixMate.md)
+- [SRS V0.3](docs/SRS/SRS%20V0.3%20FixMate.md)
 - [Architecture](docs/architecture/01-Architecture.md)
 - [ERD](docs/ERD/02-ERD.md)
 - [API specification](docs/Design/03-API.md)

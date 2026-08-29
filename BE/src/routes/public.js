@@ -1,10 +1,34 @@
 import { Router } from 'express';
 import { Service, TechnicianProfile, Review } from '../models/index.js';
 import { asyncHandler } from '../utils/async-handler.js';
-import { escapeRegex, pageQuery } from '../utils/validation.js';
+import { escapeRegex, objectIdParam, pageQuery } from '../utils/validation.js';
 import { notFound } from '../utils/http-error.js';
 
 const router = Router();
+router.param('id', objectIdParam);
+
+function publicTechnician(profile) {
+  return {
+    id: profile._id,
+    user: profile.user,
+    serviceIds: profile.serviceIds,
+    experienceYears: profile.experienceYears,
+    bio: profile.bio,
+    area: profile.area,
+    ratingAverage: profile.ratingAverage,
+    ratingCount: profile.ratingCount,
+  };
+}
+
+function publicReview(review) {
+  return {
+    id: review._id,
+    customer: review.customer,
+    rating: review.rating,
+    comment: review.comment,
+    createdAt: review.createdAt,
+  };
+}
 
 router.get('/services', asyncHandler(async (request, response) => {
   const { limit, page } = pageQuery(request.query);
@@ -20,11 +44,29 @@ router.get('/services', asyncHandler(async (request, response) => {
   response.json({ items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 }));
 
+router.get('/services/:id', asyncHandler(async (request, response) => {
+  const service = await Service.findOne({ _id: request.params.id, isActive: true }).lean();
+  if (!service) throw notFound('Không tìm thấy dịch vụ.');
+  response.json({
+    service: {
+      ...service,
+      scope: service.description,
+      exclusions: 'Linh kiện và công việc phát sinh phải được ghi rõ trong báo giá.',
+      laborWarrantyDays: 30,
+    },
+  });
+}));
+
 router.get('/technicians', asyncHandler(async (request, response) => {
   const { limit, page } = pageQuery(request.query);
   const filter = { approvalStatus: 'APPROVED', acceptingJobs: true };
-  if (request.query.serviceId) filter.serviceIds = request.query.serviceId;
-  if (request.query.area) filter.area = new RegExp(escapeRegex(request.query.area), 'i');
+  if (request.query.serviceId) {
+    if (!/^[a-f\d]{24}$/i.test(String(request.query.serviceId))) {
+      throw notFound('Dịch vụ không hợp lệ.');
+    }
+    filter.serviceIds = request.query.serviceId;
+  }
+  if (request.query.area) filter.area = new RegExp(escapeRegex(String(request.query.area).slice(0, 100)), 'i');
   const items = await TechnicianProfile.find(filter)
     .populate('user', 'name')
     .populate('serviceIds', 'name')
@@ -32,7 +74,7 @@ router.get('/technicians', asyncHandler(async (request, response) => {
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();
-  response.json({ items, pagination: { page, limit } });
+  response.json({ items: items.map(publicTechnician), pagination: { page, limit } });
 }));
 
 router.get('/technicians/:id', asyncHandler(async (request, response) => {
@@ -46,7 +88,10 @@ router.get('/technicians/:id', asyncHandler(async (request, response) => {
     .sort({ createdAt: -1 })
     .limit(20)
     .lean();
-  response.json({ technician, reviews });
+  response.json({
+    technician: publicTechnician(technician),
+    reviews: reviews.map(publicReview),
+  });
 }));
 
 export default router;

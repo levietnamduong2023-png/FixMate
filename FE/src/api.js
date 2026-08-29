@@ -1,20 +1,31 @@
-const TOKEN_KEY = 'fixmate_token';
+let accessToken = null;
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  accessToken = token || null;
 }
 
-export async function api(path, options = {}) {
+export async function api(path, options = {}, allowRefresh = true) {
   const headers = new Headers(options.headers || {});
   const token = getToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (token) headers.set('Authorization', 'Bearer ' + token);
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(`/api${path}`, { ...options, headers });
+  const response = await fetch('/api' + path, { ...options, headers, credentials: 'include' });
+  if (response.status === 401 && allowRefresh && !path.startsWith('/auth/')) {
+    const refreshed = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (refreshed.ok) {
+      const session = await refreshed.json();
+      setToken(session.token);
+      return api(path, options, false);
+    }
+  }
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(payload?.error?.message || 'Không thể kết nối đến hệ thống.');
